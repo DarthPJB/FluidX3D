@@ -407,7 +407,7 @@ $$f_j(i\\%2\\ ?\\ \vec{x}+\vec{e}_i\\ :\\ \vec{x},\\ t+\Delta t)=f_i^\textrm{tem
 ## Solving the Compatibility Problem
 
 - FluidX3D is written in OpenCL 1.2, so it runs on any hardware from any vendor (Nvidia, AMD, Intel, ...):
-  - world's fastest datacenter GPUs, like H100, A100, MI250(X), MI210, MI100, V100(S), P100, ...
+  - world's fastest datacenter GPUs, like MI300X, H100 (NVL), A100, MI200, MI100, V100(S), GPU Max 1100, ...
   - gaming GPUs (desktop or laptop), like Nvidia GeForce, AMD Radeon, Intel Arc
   - professional/workstation GPUs, like Nvidia Quadro, AMD Radeon Pro / FirePro
   - integrated GPUs
@@ -442,13 +442,15 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟡 ARM, 🟤 Glenfly
 | Device                                           | FP32<br>[TFlops/s] | Mem<br>[GB] | BW<br>[GB/s] | FP32/FP32<br>[MLUPs/s] | FP32/FP16S<br>[MLUPs/s] | FP32/FP16C<br>[MLUPs/s] |
 | :----------------------------------------------- | -----------------: | ----------: | -----------: | ---------------------: | ----------------------: | ----------------------: |
 |                                                  |                    |             |              |                        |                         |                         |
+| 🔴&nbsp;Instinct&nbsp;MI300X                     |             163.40 |         192 |         5300 |       20711&nbsp;(60%) |        38207&nbsp;(56%) |        31169&nbsp;(45%) |
 | 🔴&nbsp;Instinct&nbsp;MI250&nbsp;(1&nbsp;GCD)    |              45.26 |          64 |         1638 |             5638 (53%) |              9030 (42%) |              8506 (40%) |
 | 🔴&nbsp;Instinct&nbsp;MI210                      |              45.26 |          64 |         1638 |             6517 (61%) |              9547 (45%) |              8829 (41%) |
 | 🔴&nbsp;Instinct&nbsp;MI100                      |              46.14 |          32 |         1228 |             5093 (63%) |              8133 (51%) |              8542 (54%) |
 | 🔴&nbsp;Instinct&nbsp;MI60                       |              14.75 |          32 |         1024 |             3570 (53%) |              5047 (38%) |              5111 (38%) |
 | 🔴&nbsp;Radeon&nbsp;VII                          |              13.83 |          16 |         1024 |             4898 (73%) |              7778 (58%) |              5256 (40%) |
 | 🔵&nbsp;Data&nbsp;Center&nbsp;GPU&nbsp;Max&nbsp;1100 |          22.22 |          48 |         1229 |             3487 (43%) |              6209 (39%) |              3252 (20%) |
-| 🟢&nbsp;H100&nbsp;PCIe&nbsp;80GB                 |              51.01 |          80 |         2000 |       11128&nbsp;(85%) |        20624&nbsp;(79%) |        13862&nbsp;(53%) |
+| 🟢&nbsp;H100&nbsp;NVL                            |              60.32 |          94 |         3938 |       20018&nbsp;(78%) |        32613&nbsp;(64%) |        17605&nbsp;(34%) |
+| 🟢&nbsp;H100&nbsp;PCIe                           |              51.01 |          80 |         2000 |       11128&nbsp;(85%) |        20624&nbsp;(79%) |        13862&nbsp;(53%) |
 | 🟢&nbsp;A100&nbsp;SXM4&nbsp;80GB                 |              19.49 |          80 |         2039 |       10228&nbsp;(77%) |        18448&nbsp;(70%) |        11197&nbsp;(42%) |
 | 🟢&nbsp;A100&nbsp;PCIe&nbsp;80GB                 |              19.49 |          80 |         1935 |             9657 (76%) |        17896&nbsp;(71%) |        10817&nbsp;(43%) |
 | 🟢&nbsp;PG506-243&nbsp;/&nbsp;PG506-242          |              22.14 |          64 |         1638 |             8195 (77%) |        15654&nbsp;(74%) |        12271&nbsp;(58%) |
@@ -544,7 +546,7 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟡 ARM, 🟤 Glenfly
 | 🟢&nbsp;GeForce&nbsp;GTX&nbsp;680&nbsp;4GB       |               3.33 |           4 |          192 |              783 (62%) |              1274 (51%) |               814 (33%) |
 | 🟢&nbsp;Quadro&nbsp;K2000                        |               0.73 |           2 |           64 |              312 (75%) |               444 (53%) |               171 (21%) |
 | 🟢&nbsp;GeForce&nbsp;GT&nbsp;630&nbsp;(OEM)      |               0.46 |           2 |           29 |              151 (81%) |               185 (50%) |                78 (21%) |
-| 🟢&nbsp;Quadro&nbsp;NVS&nbsp;290                 |               0.03 |       0.256 |            6 |                1 ( 2%) |                 1 ( 1%) |                 1 ( 1%) |
+| 🟢&nbsp;Quadro&nbsp;NVS&nbsp;290                 |               0.03 |         1/4 |            6 |                9 (22%) |                 4 ( 5%) |                 4 ( 5%) |
 | 🟤&nbsp;Arise&nbsp;1020                          |               1.50 |           2 |           19 |                6 ( 5%) |                 6 ( 2%) |                 6 ( 2%) |
 |                                                  |                    |             |              |                        |                         |                         |
 | ⚪&nbsp;M2&nbsp;Max&nbsp;GPU&nbsp;38CU&nbsp;32GB |               9.73 |          22 |          400 |             2405 (92%) |              4641 (89%) |              2444 (47%) |
@@ -565,30 +567,41 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟡 ARM, 🟤 Glenfly
 | 🟡&nbsp;Mali-G72&nbsp;MP18 (Samsung&nbsp;S9+)    |               0.24 |           4 |           29 |              110 (59%) |               230 (62%) |                21 ( 6%) |
 |                                                  |                    |             |              |                        |                         |                         |
 | 🔴&nbsp;2x&nbsp;EPYC&nbsp;9654                   |              43.62 |        1536 |          922 |             1381 (23%) |              1814 (15%) |              1801 (15%) |
+| 🔴&nbsp;2x&nbsp;EPYC&nbsp;7352                   |               3.53 |         512 |          410 |              739 (28%) |               106 ( 2%) |               412 ( 8%) |
+| 🔴&nbsp;2x&nbsp;EPYC&nbsp;7313                   |               3.07 |         128 |          410 |              498 (19%) |               367 ( 7%) |               418 ( 8%) |
+| 🔴&nbsp;2x&nbsp;EPYC&nbsp;7302                   |               3.07 |         128 |          410 |              784 (29%) |               336 ( 6%) |               411 ( 8%) |
 | 🔵&nbsp;2x&nbsp;Xeon&nbsp;CPU&nbsp;Max&nbsp;9480 |              27.24 |         256 |          614 |             2037 (51%) |              1520 (19%) |              1464 (18%) |
 | 🔵&nbsp;2x&nbsp;Xeon&nbsp;Platinum&nbsp;8480+    |              28.67 |         512 |          614 |             2162 (54%) |              1845 (23%) |              1884 (24%) |
 | 🔵&nbsp;2x&nbsp;Xeon&nbsp;Platinum&nbsp;8380     |              23.55 |        2048 |          410 |             1410 (53%) |              1159 (22%) |              1298 (24%) |
 | 🔵&nbsp;2x&nbsp;Xeon&nbsp;Platinum&nbsp;8358     |              21.30 |         256 |          410 |             1285 (48%) |              1007 (19%) |              1120 (21%) |
-| 🔵&nbsp;1x&nbsp;Xeon&nbsp;Platinum&nbsp;8358     |              10.65 |         128 |          205 |              444 (33%) |               463 (17%) |               534 (20%) |
-| 🔵&nbsp;1x&nbsp;Xeon&nbsp;Platinum&nbsp;8256     |               3.89 |        1536 |          141 |              396 (43%) |               158 ( 9%) |               175 (10%) |
+| 🔵&nbsp;2x&nbsp;Xeon&nbsp;Platinum&nbsp;8256     |               3.89 |        1536 |          282 |              396 (22%) |               158 ( 4%) |               175 ( 5%) |
 | 🔵&nbsp;2x&nbsp;Xeon&nbsp;Platinum&nbsp;8153     |               8.19 |         384 |          256 |              691 (41%) |               290 ( 9%) |               328 (10%) |
+| 🔵&nbsp;2x&nbsp;Xeon&nbsp;Gold&nbsp;6248R        |              18.43 |         384 |          282 |              755 (41%) |               566 (15%) |               694 (19%) |
 | 🔵&nbsp;2x&nbsp;Xeon&nbsp;Gold&nbsp;6128         |               5.22 |         192 |          256 |              254 (15%) |               185 ( 6%) |               193 ( 6%) |
 | 🔵&nbsp;Xeon&nbsp;Phi&nbsp;7210                  |               5.32 |         192 |          102 |              415 (62%) |               193 (15%) |               223 (17%) |
 | 🔵&nbsp;4x&nbsp;Xeon&nbsp;E5-4620&nbsp;v4        |               2.69 |         512 |          273 |              460 (26%) |               275 ( 8%) |               239 ( 7%) |
 | 🔵&nbsp;2x&nbsp;Xeon&nbsp;E5-2630&nbsp;v4        |               1.41 |          64 |          137 |              264 (30%) |               146 ( 8%) |               129 ( 7%) |
 | 🔵&nbsp;2x&nbsp;Xeon&nbsp;E5-2623&nbsp;v4        |               0.67 |          64 |          137 |              125 (14%) |                66 ( 4%) |                59 ( 3%) |
-| 🔵&nbsp;2x&nbsp;Xeon&nbsp;E5-2680&nbsp;v3        |               1.92 |          64 |          137 |              209 (23%) |               305 (17%) |               281 (16%) |
+| 🔵&nbsp;2x&nbsp;Xeon&nbsp;E5-2680&nbsp;v3        |               1.92 |         128 |          137 |              304 (34%) |               234 (13%) |               291 (16%) |
 | 🔴&nbsp;Threadripper&nbsp;PRO&nbsp;7995WX        |              15.36 |         256 |          333 |             1134 (52%) |              1697 (39%) |              1715 (40%) |
+| 🔴&nbsp;Threadripper&nbsp;3970X                  |               3.79 |         128 |          102 |              376 (56%) |               103 ( 8%) |               463 (35%) |
+| 🔴&nbsp;Threadripper&nbsp;1950X                  |               0.87 |         128 |           85 |              273 (49%) |                43 ( 4%) |               151 (14%) |
+| 🔴&nbsp;FX-6100                                  |               0.16 |          16 |           26 |               11 ( 7%) |                11 ( 3%) |                22 ( 7%) |
+| 🔴&nbsp;Athlon&nbsp;X2&nbsp;QL-65                |               0.03 |           4 |           11 |                3 ( 4%) |                 2 ( 2%) |                 3 ( 2%) |
 | 🔵&nbsp;Core&nbsp;i7-13700K                      |               2.51 |          64 |           90 |              504 (86%) |               398 (34%) |               424 (36%) |
 | 🔵&nbsp;Core&nbsp;i7-1265U                       |               1.23 |          32 |           77 |              128 (26%) |                62 ( 6%) |                58 ( 6%) |
 | 🔵&nbsp;Core&nbsp;i9-11900KB                     |               0.84 |          32 |           51 |              109 (33%) |               195 (29%) |               208 (31%) |
 | 🔵&nbsp;Core&nbsp;i9-10980XE                     |               3.23 |         128 |           94 |              286 (47%) |               251 (21%) |               223 (18%) |
+| 🔵&nbsp;Xeon&nbsp;E-2288G                        |               0.95 |          32 |           43 |              196 (70%) |               182 (33%) |               198 (36%) |
+| 🔵&nbsp;Core&nbsp;i7-9700                        |               0.77 |          64 |           43 |              103 (37%) |                62 (11%) |                95 (17%) |
 | 🔵&nbsp;Core&nbsp;i5-9600                        |               0.60 |          16 |           43 |              146 (52%) |               127 (23%) |               147 (27%) |
 | 🔵&nbsp;Core&nbsp;i7-8700K                       |               0.71 |          16 |           51 |              152 (45%) |               134 (20%) |               116 (17%) |
 | 🔵&nbsp;Xeon&nbsp;E-2176G                        |               0.71 |          64 |           42 |              201 (74%) |               136 (25%) |               148 (27%) |
 | 🔵&nbsp;Core&nbsp;i7-7700HQ                      |               0.36 |          12 |           38 |               81 (32%) |                82 (16%) |               108 (22%) |
+| 🔵&nbsp;Xeon&nbsp;E3-1240&nbsp;v5                |               0.50 |          32 |           34 |              141 (63%) |                75 (17%) |                88 (20%) |
 | 🔵&nbsp;Core&nbsp;i7-4770                        |               0.44 |          16 |           26 |              104 (62%) |                69 (21%) |                59 (18%) |
 | 🔵&nbsp;Core&nbsp;i7-4720HQ                      |               0.33 |          16 |           26 |               80 (48%) |                23 ( 7%) |                60 (18%) |
+| 🔵&nbsp;Celeron&nbsp;N2807                       |               0.01 |           4 |           11 |                7 (10%) |                 3 ( 2%) |                 3 ( 2%) |
 
 
 
@@ -761,4 +774,4 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟡 ARM, 🟤 Glenfly
 I'm developing FluidX3D in my spare time, to make computational fluid dynamics lightning fast, accessible on all hardware, and free for everyone.
 - You can support FluidX3D by reporting any bugs or things that don't work in the [issues](https://github.com/ProjectPhysX/FluidX3D/issues). I'm welcoming feedback!
 - If you like FluidX3D, share it with friends and colleagues. Spread the word that CFD is now lightning fast, accessible and free.
-- If you want to support FluidX3D financially, you can [buy me a coffee](https://buymeacoffee.com/projectphysx). Thank you!
+- If you want to support FluidX3D financially, you can [sponsor me on GitHub](https://github.com/sponsors/ProjectPhysX) or [buy me a coffee](https://buymeacoffee.com/projectphysx). Thank you!

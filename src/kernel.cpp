@@ -209,7 +209,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 	}
 }
 )+R(void draw(const int x, const int y, const float z, const int color, global int* bitmap, volatile global int* zbuffer, const int stereo) {
-	const int index=x+y*def_screen_width, iz=(int)(z*(2147483647.0f/10000.0f)); // use int z-buffer and atomic_max to minimize noise in image
+	const int index=x+y*def_screen_width, iz=(int)(z*1E3f); // use fixed-point int z-buffer and atomic_max to minimize noise in image, maximum render distance is 2.147E6f
 )+"#ifndef GRAPHICS_TRANSPARENCY"+R(
 	if(!is_off_screen(x, y, stereo)&&iz>atomic_max(&zbuffer[index], iz)) bitmap[index] = color; // only draw if point is on screen and first in zbuffer
 )+"#else"+R( // GRAPHICS_TRANSPARENCY
@@ -758,16 +758,16 @@ string opencl_c_container() { return R( // ########################## begin of O
 				const uxx zq = (uxx) (((uint)xyz.z   +2u)%Nz)*(uxx)(Ny*Nx);
 				const uxx zm = (uxx) (((uint)xyz.z+Nz-1u)%Nz)*(uxx)(Ny*Nx);
 				float3 n[8];
-				n[0] = normalize((float3)(phi[xm+y0+z0]-v[1], phi[x0+ym+z0]-v[4], phi[x0+y0+zm]-v[3])); // central difference stencil on each cube corner point
-				n[1] = normalize((float3)(v[0]-phi[xq+y0+z0], phi[xp+ym+z0]-v[5], phi[xp+y0+zm]-v[2])); // compute normal vectors from gradient
-				n[2] = normalize((float3)(v[3]-phi[xq+y0+zp], phi[xp+ym+zp]-v[6], v[1]-phi[xp+y0+zq])); // normalize later during trilinear interpolation more efficiently
-				n[3] = normalize((float3)(phi[xm+y0+zp]-v[2], phi[x0+ym+zp]-v[7], v[0]-phi[x0+y0+zq]));
-				n[4] = normalize((float3)(phi[xm+yp+z0]-v[5], v[0]-phi[x0+yq+z0], phi[x0+yp+zm]-v[7]));
-				n[5] = normalize((float3)(v[4]-phi[xq+yp+z0], v[1]-phi[xp+yq+z0], phi[xp+yp+zm]-v[6]));
-				n[6] = normalize((float3)(v[7]-phi[xq+yp+zp], v[2]-phi[xp+yq+zp], v[5]-phi[xp+yp+zq]));
-				n[7] = normalize((float3)(phi[xm+yp+zp]-v[6], v[3]-phi[x0+yq+zp], v[4]-phi[x0+yp+zq]));
+				n[0] = (float3)(phi[xm+y0+z0]-v[1], phi[x0+ym+z0]-v[4], phi[x0+y0+zm]-v[3]); // central difference stencil on each cube corner point
+				n[1] = (float3)(v[0]-phi[xq+y0+z0], phi[xp+ym+z0]-v[5], phi[xp+y0+zm]-v[2]); // compute normal vectors from gradient
+				n[2] = (float3)(v[3]-phi[xq+y0+zp], phi[xp+ym+zp]-v[6], v[1]-phi[xp+y0+zq]); // normalize later after trilinear interpolation
+				n[3] = (float3)(phi[xm+y0+zp]-v[2], phi[x0+ym+zp]-v[7], v[0]-phi[x0+y0+zq]);
+				n[4] = (float3)(phi[xm+yp+z0]-v[5], v[0]-phi[x0+yq+z0], phi[x0+yp+zm]-v[7]);
+				n[5] = (float3)(v[4]-phi[xq+yp+z0], v[1]-phi[xp+yq+z0], phi[xp+yp+zm]-v[6]);
+				n[6] = (float3)(v[7]-phi[xq+yp+zp], v[2]-phi[xp+yq+zp], v[5]-phi[xp+yp+zq]);
+				n[7] = (float3)(phi[xm+yp+zp]-v[6], v[3]-phi[x0+yq+zp], v[4]-phi[x0+yp+zq]);
 				const float3 p = r.origin+intersect*r.direction-offset; // intersection point minus offset
-				*normal = trilinear3(p-floor(p), n); // perform normalization and trilinear interpolation
+				*normal = normalize(trilinear3(p-floor(p), n)); // perform trilinear interpolation and normalization
 				return intersect; // intersection found, exit loop
 			}
 		}
@@ -812,9 +812,9 @@ string opencl_c_container() { return R( // ########################## begin of O
 	float d_internal = d;
 	d = ray_grid_traverse(ray_internal, phi, flags, &normal, Nx, Ny, Nz); // 2nd ray-grid traversal call: refraction (camera outside) or total internal reflection (camera inside)
 	ray_transmit->origin = d!=-1.0f ? ray_internal.origin+(d+0.005f)*ray_internal.direction : ray_internal.origin; // start intersection points a bit behind triangle to avoid self-transmission
-	ray_transmit->direction = d!=-1.0f ? refract(ray_internal.direction, -normal, 1.0f/def_n) : ray_internal.direction; // internal ray intersects isosurface : internal ray does not intersect again
+	ray_transmit->direction = d!=-1.0f||is_inside ? refract(ray_internal.direction, -normal, 1.0f/def_n) : ray_internal.direction; // internal ray intersects isosurface : internal ray does not intersect again
 	*reflectivity = is_inside ? 0.0f : wr; // is_inside means camera is inside fluid, so this is a total internal reflection down here
-	*transmissivity = d!=-1.0f ? exp(def_attenuation*((float)is_inside*d_internal+d)) : (float)(def_attenuation==0.0f); // Beer-Lambert law
+	*transmissivity = d!=-1.0f||is_inside ? exp(def_attenuation*((float)is_inside*d_internal+d)) : (float)(def_attenuation==0.0f); // Beer-Lambert law
 	return true;
 }
 )+R(bool is_above_plane(const float3 point, const float3 plane_p, const float3 plane_n) {
@@ -907,8 +907,8 @@ string opencl_c_container() { return R( // ########################## begin of O
 	return (b&0x80000000)>>16 | (e>112)*((((e-112)<<11)&0x7800)|m>>12) | ((e<113)&(e>100))*((((0x007FF800+m)>>(124-e))+1)>>1); // sign : normalized : denormalized (assume [-2,2])
 }
 
-)+R(ulong index_f(const uxx n, const uint i) { // 64-bit indexing (maximum 2^32 lattice points (1624^3 lattice resolution, 225GB)
-	return (ulong)i*def_N+(ulong)n; // SoA (229% faster on GPU)
+)+R(ulong index_f(const uxx n, const uint i) { // 64-bit indexing for DDFs
+	return (ulong)i*def_N+(ulong)n; // SoA (>2x faster on GPUs)
 }
 )+R(float c(const uint i) { // avoid constant keyword by encapsulating data in function which gets inlined by compiler
 	const float c[3u*def_velocity_set] = {
@@ -2547,10 +2547,9 @@ string opencl_c_container() { return R( // ########################## begin of O
 			while(traversed_cells<Nx+Ny+Nz) { // limit number of traversed cells to space diagonal
 				if(tmx<tmy) { if(tmx<tmz) { xyz.x += dx; tmx += tdx; } else { xyz.z += dz; tmz += tdz; } }
 				else /****/ { if(tmy<tmz) { xyz.y += dy; tmy += tdy; } else { xyz.z += dz; tmz += tdz; } }
-				if(xyz.x<-1 || xyz.y<-1 || xyz.z<-1 || xyz.x>=(int)Nx || xyz.y>=(int)Ny || xyz.z>=(int)Nz) break; // out of simulation box
-				else if(xyz.x<0 || xyz.y<0 || xyz.z<0 || xyz.x>=(int)Nx-1 || xyz.y>=(int)Ny-1 || xyz.z>=(int)Nz-1) continue;
+				if(xyz.x<0 || xyz.y<0 || xyz.z<0 || xyz.x>=(int)Nx || xyz.y>=(int)Ny || xyz.z>=(int)Nz) break; // out of simulation box
 				const uxx n = index((uint3)((uint)clamp(xyz.x, 0, (int)Nx-1), (uint)clamp(xyz.y, 0, (int)Ny-1), (uint)clamp(xyz.z, 0, (int)Nz-1)));
-				if(!(flags[n]&(TYPE_S|TYPE_G))) {
+				if(!(flags[n]&(TYPE_S|TYPE_E|TYPE_G))) {
 					const float un = length(load3(n, u));
 					const float weight = sq(un)+sq(un-0.5f/def_scale_u);
 					sum = fma(weight, un, sum);
@@ -2565,10 +2564,9 @@ string opencl_c_container() { return R( // ########################## begin of O
 			while(traversed_cells<Nx+Ny+Nz) { // limit number of traversed cells to space diagonal
 				if(tmx<tmy) { if(tmx<tmz) { xyz.x += dx; tmx += tdx; } else { xyz.z += dz; tmz += tdz; } }
 				else /****/ { if(tmy<tmz) { xyz.y += dy; tmy += tdy; } else { xyz.z += dz; tmz += tdz; } }
-				if(xyz.x<-1 || xyz.y<-1 || xyz.z<-1 || xyz.x>=(int)Nx || xyz.y>=(int)Ny || xyz.z>=(int)Nz) break; // out of simulation box
-				else if(xyz.x<0 || xyz.y<0 || xyz.z<0 || xyz.x>=(int)Nx-1 || xyz.y>=(int)Ny-1 || xyz.z>=(int)Nz-1) continue;
+				if(xyz.x<0 || xyz.y<0 || xyz.z<0 || xyz.x>=(int)Nx || xyz.y>=(int)Ny || xyz.z>=(int)Nz) break; // out of simulation box
 				const uxx n = index((uint3)((uint)clamp(xyz.x, 0, (int)Nx-1), (uint)clamp(xyz.y, 0, (int)Ny-1), (uint)clamp(xyz.z, 0, (int)Nz-1)));
-				if(!(flags[n]&(TYPE_S|TYPE_G))) {
+				if(!(flags[n]&(TYPE_S|TYPE_E|TYPE_G))) {
 					const float rhon = rho[n];
 					const float weight = sq(rhon-1.0f);
 					sum = fma(weight, rhon, sum);
@@ -2584,10 +2582,9 @@ string opencl_c_container() { return R( // ########################## begin of O
 			while(traversed_cells<Nx+Ny+Nz) { // limit number of traversed cells to space diagonal
 				if(tmx<tmy) { if(tmx<tmz) { xyz.x += dx; tmx += tdx; } else { xyz.z += dz; tmz += tdz; } }
 				else /****/ { if(tmy<tmz) { xyz.y += dy; tmy += tdy; } else { xyz.z += dz; tmz += tdz; } }
-				if(xyz.x<-1 || xyz.y<-1 || xyz.z<-1 || xyz.x>=(int)Nx || xyz.y>=(int)Ny || xyz.z>=(int)Nz) break; // out of simulation box
-				else if(xyz.x<0 || xyz.y<0 || xyz.z<0 || xyz.x>=(int)Nx-1 || xyz.y>=(int)Ny-1 || xyz.z>=(int)Nz-1) continue;
+				if(xyz.x<0 || xyz.y<0 || xyz.z<0 || xyz.x>=(int)Nx || xyz.y>=(int)Ny || xyz.z>=(int)Nz) break; // out of simulation box
 				const uxx n = index((uint3)((uint)clamp(xyz.x, 0, (int)Nx-1), (uint)clamp(xyz.y, 0, (int)Ny-1), (uint)clamp(xyz.z, 0, (int)Nz-1)));
-				if(!(flags[n]&(TYPE_S|TYPE_G))) {
+				if(!(flags[n]&(TYPE_S|TYPE_E|TYPE_G))) {
 					const float Tn = T[n];
 					const float weight = sq(Tn-def_T_avg);
 					sum = fma(weight, Tn, sum);

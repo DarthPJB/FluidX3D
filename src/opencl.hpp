@@ -11,6 +11,76 @@
 #include "utilities.hpp"
 using cl::Event;
 
+static const string driver_installation_instructions =
+#ifdef _WIN32
+R"(|----------------.------------------------------------------------------------'
+|       AMD GPUs | https://www.amd.com/en/support/download/drivers.html
+|     Intel GPUs | https://www.intel.com/content/www/us/en/download/785597/intel-arc-iris-xe-graphics-windows.html
+|    Nvidia GPUs | https://www.nvidia.com/Download/index.aspx
+| AMD/Intel CPUs | https://www.intel.com/content/www/us/en/developer/articles/technical/intel-cpu-runtime-for-opencl-applications-with-sycl-support.html
+|----------------'------------------------------------------------------------.
+| Don't forget to reboot after installation! Press Enter to exit.             |
+'-----------------------------------------------------------------------------')""\n";
+#else // Linux
+string("'-----------------------------------------------------------------------------'\n")+R"(
+)"+string("\033[31m")+R"(.-----------------------------------------------------------------------------.
+| AMD GPU Drivers, which contain the OpenCL Runtime                           |
+'-----------------------------------------------------------------------------'
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y g++ git make ocl-icd-libopencl1 ocl-icd-opencl-dev
+mkdir -p ~/amdgpu
+wget -P ~/amdgpu https://repo.radeon.com/amdgpu-install/6.1.3/ubuntu/jammy/amdgpu-install_6.1.60103-1_all.deb
+sudo apt install -y ~/amdgpu/amdgpu-install*.deb
+sudo amdgpu-install -y --usecase=graphics,rocm,opencl --opencl=rocr
+sudo usermod -a -G render,video $(whoami)
+rm -r ~/amdgpu
+sudo shutdown -r now
+
+)"+string("\033[36m")+R"(.-----------------------------------------------------------------------------.
+| Intel GPU Drivers are already installed, only the OpenCL Runtime is needed  |
+'-----------------------------------------------------------------------------'
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y g++ git make ocl-icd-libopencl1 ocl-icd-opencl-dev intel-opencl-icd
+sudo usermod -a -G render $(whoami)
+sudo shutdown -r now
+
+)"+string("\033[32m")+R"(.-----------------------------------------------------------------------------.
+| Nvidia GPU Drivers, which contain the OpenCL Runtime                        |
+'-----------------------------------------------------------------------------'
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y g++ git make ocl-icd-libopencl1 ocl-icd-opencl-dev nvidia-driver-550
+sudo shutdown -r now
+
+)"+string("\033[96m")+R"(.-----------------------------------------------------------------------------.
+| CPU Option 1: Intel CPU Runtime for OpenCL (works for both AMD/Intel CPUs)  |
+'-----------------------------------------------------------------------------'
+export OCLCPUEXP_VERSION="2024.18.6.0.02_rel"
+export ONEAPI_TBB_VERSION="2021.13.0"
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y g++ git make ocl-icd-libopencl1 ocl-icd-opencl-dev
+sudo mkdir -p ~/cpuruntime /opt/intel/oclcpuexp_${OCLCPUEXP_VERSION} /etc/OpenCL/vendors /etc/ld.so.conf.d
+sudo wget -P ~/cpuruntime https://github.com/intel/llvm/releases/download/2024-WW25/oclcpuexp-${OCLCPUEXP_VERSION}.tar.gz
+sudo wget -P ~/cpuruntime https://github.com/oneapi-src/oneTBB/releases/download/v${ONEAPI_TBB_VERSION}/oneapi-tbb-${ONEAPI_TBB_VERSION}-lin.tgz
+sudo tar -zxvf ~/cpuruntime/oclcpuexp-${OCLCPUEXP_VERSION}.tar.gz -C /opt/intel/oclcpuexp_${OCLCPUEXP_VERSION}
+sudo tar -zxvf ~/cpuruntime/oneapi-tbb-${ONEAPI_TBB_VERSION}-lin.tgz -C /opt/intel
+echo /opt/intel/oclcpuexp_${OCLCPUEXP_VERSION}/x64/libintelocl.so | sudo tee /etc/OpenCL/vendors/intel_expcpu.icd
+echo /opt/intel/oclcpuexp_${OCLCPUEXP_VERSION}/x64 | sudo tee /etc/ld.so.conf.d/libintelopenclexp.conf
+sudo ln -sf /opt/intel/oneapi-tbb-${ONEAPI_TBB_VERSION}/lib/intel64/gcc4.8/libtbb.so /opt/intel/oclcpuexp_${OCLCPUEXP_VERSION}/x64
+sudo ln -sf /opt/intel/oneapi-tbb-${ONEAPI_TBB_VERSION}/lib/intel64/gcc4.8/libtbbmalloc.so /opt/intel/oclcpuexp_${OCLCPUEXP_VERSION}/x64
+sudo ln -sf /opt/intel/oneapi-tbb-${ONEAPI_TBB_VERSION}/lib/intel64/gcc4.8/libtbb.so.12 /opt/intel/oclcpuexp_${OCLCPUEXP_VERSION}/x64
+sudo ln -sf /opt/intel/oneapi-tbb-${ONEAPI_TBB_VERSION}/lib/intel64/gcc4.8/libtbbmalloc.so.2 /opt/intel/oclcpuexp_${OCLCPUEXP_VERSION}/x64
+sudo ldconfig -f /etc/ld.so.conf.d/libintelopenclexp.conf
+sudo rm -r ~/cpuruntime
+
+)"+string("\033[33m")+R"(.-----------------------------------------------------------------------------.
+| CPU Option 2: PoCL                                                          |
+'-----------------------------------------------------------------------------'
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y g++ git make ocl-icd-libopencl1 ocl-icd-opencl-dev pocl-opencl-icd
+
+)"+string("\033[0m");
+#endif // Linux
+
 struct Device_Info {
 	cl::Device cl_device; // OpenCL device
 	cl::Context cl_context; // multiple devices in the same context can communicate buffers
@@ -25,7 +95,7 @@ struct Device_Info {
 	uint clock_frequency=0u; // in MHz
 	bool is_cpu=false, is_gpu=false;
 	bool intel_gpu_above_4gb_patch = false; // memory allocations greater than 4GB need to be specifically enabled on Intel GPUs
-	bool arm_fma_patch = false;  // ARM GPUs have terrible fma performance, so replace with a*b+c
+	bool legacy_gpu_fma_patch = false; // some old GPUs have terrible fma performance, so replace with a*b+c
 	uint is_fp64_capable=0u, is_fp32_capable=0u, is_fp16_capable=0u, is_int64_capable=0u, is_int32_capable=0u, is_int16_capable=0u, is_int8_capable=0u;
 	uint cores=0u; // for CPUs, compute_units is the number of threads (twice the number of cores with hyperthreading)
 	float tflops=0.0f; // estimated device FP32 floating point performance in TeraFLOPs/s
@@ -77,8 +147,8 @@ struct Device_Info {
 				memory = (uint)((cl_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()*50ull/49ull)/1048576ull); // fix wrong (98% on Windows) memory reporting on Intel Arc
 			}
 		}
-		intel_gpu_above_4gb_patch = (intel==8.0f)&&(memory>4096); // enable memory allocations greater than 4GB for Intel GPUs with >4GB VRAM
-		arm_fma_patch = contains(to_lower(vendor), "arm"); // enable for all ARM GPUs
+		intel_gpu_above_4gb_patch = intel_gpu_above_4gb_patch||((intel==8.0f)&&(memory>4096)); // enable memory allocations greater than 4GB for Intel GPUs with >4GB VRAM
+		legacy_gpu_fma_patch = legacy_gpu_fma_patch||contains(to_lower(vendor), "arm"); // enable for all ARM GPUs
 	}
 	inline Device_Info() {}; // default constructor
 };
@@ -120,7 +190,12 @@ inline vector<Device_Info> get_devices(const bool print_info=true) { // returns 
 		}
 	}
 	if((uint)cl_platforms.size()==0u||(uint)devices.size()==0u) {
-		print_error("There are no OpenCL devices available. Make sure that the OpenCL 1.2 Runtime for your device is installed. For GPUs it comes by default with the graphics driver, for CPUs it has to be installed separately.");
+		print_message("No OpenCL devices are available. Please install the drivers for your GPU(s) and/or the CPU Runtime for OpenCL. Instructions:", "Error", 12);
+		print(driver_installation_instructions);
+#ifdef _WIN32
+		wait();
+#endif // Windows
+		exit(1);
 	}
 	if(print_info) {
 		println("\r|----------------.------------------------------------------------------------|");
@@ -176,7 +251,7 @@ private:
 		"\n	#ifdef cl_khr_int64_base_atomics"
 		"\n	#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable" // make sure cl_khr_int64_base_atomics extension is enabled
 		"\n	#endif"
-		+(info.arm_fma_patch ? "\n #define fma(a, b, c) ((a)*(b)+(c))" : "") // ARM GPUs have terrible fma performance, so replace with a*b+c
+		+(info.legacy_gpu_fma_patch ? "\n #define fma(a, b, c) ((a)*(b)+(c))" : "") // some old GPUs have terrible fma performance, so replace with a*b+c
 	;}
 public:
 	Device_Info info;
