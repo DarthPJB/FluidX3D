@@ -413,7 +413,7 @@ public:
 	LBM(const uint3 N, const float nu, const float fx, const float fy, const float fz, const uint particles_N, const float particles_rho=1.0f); // compiles OpenCL C code and allocates memory
 	~LBM();
 
-	void run(const ulong steps=max_ulong); // initializes the LBM simulation (copies data to device and runs initialize kernel), then runs LBM
+	void run(const ulong steps=max_ulong, const ulong total_steps=max_ulong); // initializes the LBM simulation (copies data to device and runs initialize kernel), then runs LBM
 	void update_fields(); // update fields (rho, u, T) manually
 	void reset(); // reset simulation (takes effect in following run() call)
 #ifdef FORCE_FIELD
@@ -439,7 +439,7 @@ public:
 	uint get_D() const { return Dx*Dy*Dz; } // get number of lattice domains
 	float get_nu() const { return lbm_domain[0]->get_nu(); } // get kinematic shear viscosity
 	float get_tau() const { return 3.0f*get_nu()+0.5f; } // get LBM relaxation time
-	float get_Re_max() const { return 0.57735027f*(float)min(min(Nx, Ny), Nz)/get_nu(); } // Re < c*L/nu
+	float get_Re_max() const { return 0.57735027f*sqrt((float)(sq(Nx)+sq(Ny)+sq(Nz)))/get_nu(); } // Re < Re_max = c*L_max/nu
 	float get_fx() const { return lbm_domain[0]->get_fx(); } // get global froce per volume
 	float get_fy() const { return lbm_domain[0]->get_fy(); } // get global froce per volume
 	float get_fz() const { return lbm_domain[0]->get_fz(); } // get global froce per volume
@@ -467,6 +467,9 @@ public:
 	}
 	ulong index(const uint x, const uint y, const uint z) const { // turn 3D coordinates into 1D linear index
 		return (ulong)x+((ulong)y+(ulong)z*(ulong)Ny)*(ulong)Nx;
+	}
+	ulong index(const uint3 xyz) const { // turn 3D coordinates into 1D linear index
+		return index(xyz.x, xyz.y, xyz.z);
 	}
 	ulong index(const float3& p) const { // turn 3D position into closest 1D linear index
 		uint x=0u, y=0u, z=0u;
